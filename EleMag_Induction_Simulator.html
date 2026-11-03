@@ -1,0 +1,540 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>電磁誘導シミュレーター</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: 実験台(キャンバス)を左、操作と数値を右の列に置く。幅が狭いと縦積み。 */
+:root{
+  --bg:#f1f4f7; --panel:#ffffff; --fg:#14202b; --muted:#5a6a78; --line:#d3dbe3;
+  --rail:#3d4a57; --rod:#8693a0; --cur:#e8590c; --vel:#2b8a3e; --force:#c92a2a;
+  --elec:#1c7ed6; --purple:#7048e8; --field:#4c6ef5; --plus:#d6336c; --minus:#1c7ed6;
+  --accent:#1c6fd1; --accent-fg:#ffffff; --soft:#e7edf3;
+  --font:'Zen Kaku Gothic New','Hiragino Kaku Gothic ProN','Yu Gothic',Meiryo,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0e1620; --panel:#16212c; --fg:#e6edf3; --muted:#93a4b4; --line:#293644;
+  --rail:#aab6c2; --rod:#7d8b99; --cur:#ff922b; --vel:#69db7c; --force:#ff6b6b;
+  --elec:#74c0fc; --purple:#b197fc; --field:#748ffc; --plus:#f783ac; --minus:#74c0fc;
+  --accent:#4dabf7; --accent-fg:#0b1620; --soft:#1d2b39; color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --bg:#0e1620; --panel:#16212c; --fg:#e6edf3; --muted:#93a4b4; --line:#293644;
+  --rail:#aab6c2; --rod:#7d8b99; --cur:#ff922b; --vel:#69db7c; --force:#ff6b6b;
+  --elec:#74c0fc; --purple:#b197fc; --field:#748ffc; --plus:#f783ac; --minus:#74c0fc;
+  --accent:#4dabf7; --accent-fg:#0b1620; --soft:#1d2b39; color-scheme:dark;}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:14px;line-height:1.55;
+  padding-block:18px 28px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+h1{font-size:22px;font-weight:700;margin:0;letter-spacing:.02em}
+.sub{color:var(--muted);margin:2px 0 0;font-size:13px}
+.top{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:14px;align-items:start}
+.bottom{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:14px;align-items:start}
+@media (max-width:960px){.top,.bottom{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;min-width:0}
+.stage{padding:8px}
+canvas{display:block;width:100%;height:auto;touch-action:pan-y}
+#main{cursor:default}
+.side{display:flex;flex-direction:column;gap:14px;min-width:0}
+h2{font-size:12px;font-weight:700;letter-spacing:.12em;color:var(--muted);margin:0 0 10px;text-transform:uppercase}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;min-width:0}
+.row label.t{flex:1;min-width:0}
+.fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px 10px}
+.fields .f{display:flex;flex-direction:column;gap:2px;min-width:0}
+.fields .f span{font-size:12px;color:var(--muted)}
+input[type=number],select{font:inherit;font-family:var(--mono);font-size:14px;color:var(--fg);background:var(--bg);
+  border:1px solid var(--line);border-radius:6px;padding:5px 8px;width:100%;min-width:0}
+input:disabled{opacity:.45}
+input:focus-visible,select:focus-visible,button:focus-visible,.sw input:focus-visible+i{outline:2px solid var(--accent);outline-offset:2px}
+.sw{position:relative;display:inline-flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
+.sw input{position:absolute;z-index:1;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
+.sw i{width:40px;height:22px;border-radius:11px;background:var(--line);position:relative;flex:none;transition:background .15s}
+.sw i::after{content:"";position:absolute;left:3px;top:3px;width:16px;height:16px;border-radius:50%;background:var(--panel);transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.3)}
+.sw input:checked+i{background:var(--accent)}
+.sw input:checked+i::after{transform:translateX(18px)}
+.sw b{font-weight:500;min-width:2.2em;font-size:13px}
+.btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+button{font:inherit;font-weight:500;border:1px solid var(--line);background:var(--soft);color:var(--fg);border-radius:6px;padding:7px 12px;cursor:pointer}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+button:hover{filter:brightness(1.06)}
+.hr{height:1px;background:var(--line);margin:12px 0}
+dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 12px}
+dt{color:var(--muted);font-size:13px}
+dd{margin:0;font-family:var(--mono);font-size:13px;text-align:right;overflow-wrap:anywhere}
+dd .u{color:var(--muted)}
+.pol{display:flex;gap:8px;align-items:center;justify-content:flex-end;font-family:var(--font);font-weight:700}
+.chip{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;color:#fff;font-weight:700;font-size:15px;line-height:1}
+.chip.p{background:var(--plus)} .chip.m{background:var(--minus)} .chip.z{background:var(--muted)}
+#detCard.away #det{display:none}
+#detNote{font-size:12px;color:var(--muted);margin:8px 0 0}
+.hint{font-size:12px;color:var(--muted);margin:10px 0 0}
+@media (prefers-reduced-motion:reduce){.sw i,.sw i::after{transition:none}}
+</style>
+
+<div class="wrap">
+  <div>
+    <h1>電磁誘導シミュレーター</h1>
+    <p class="sub">一様磁場(+z方向)中で、平行レール上の導体棒を動かす。棒の両端の極性と、電流・電子にはたらく力を見る。</p>
+  </div>
+
+  <div class="top">
+      <div class="card">
+        <h2>条件</h2>
+        <div class="row"><span class="t">重り(糸と滑車で棒を引く)</span>
+          <label class="sw"><input type="checkbox" id="tgW"><i></i><b id="tgWl">なし</b></label></div>
+        <div class="row"><span class="t">外部電源</span>
+          <label class="sw"><input type="checkbox" id="tgSrc"><i></i><b id="tgSl">なし</b></label></div>
+        <div class="fields">
+          <label class="f"><span>電源電圧 V [V](負で逆向き)</span><input type="number" id="inV" value="2" step="0.5" min="-50" max="50"></label>
+          <label class="f"><span>抵抗 R [Ω]</span><input type="number" id="inR" value="2" step="0.5" min="0.1" max="1000"></label>
+          <label class="f"><span>磁束密度 B [T]</span><input type="number" id="inB" value="1" step="0.1" min="0.1" max="5"></label>
+          <label class="f"><span>棒の抵抗 r [Ω]</span><input type="number" id="inr" value="0.5" step="0.1" min="0" max="100"></label>
+          <label class="f"><span>棒の質量 m [kg]</span><input type="number" id="inm" value="0.1" step="0.05" min="0.01" max="10"></label>
+          <label class="f"><span>重りの質量 M [kg]</span><input type="number" id="inM" value="0.05" step="0.05" min="0.01" max="10"></label>
+          <label class="f"><span>初速 v₀ [m/s]</span><input type="number" id="inv0" value="1.5" step="0.5" min="-10" max="10"></label>
+          <label class="f"><span>再生速度</span>
+            <select id="selTs"><option value="1">×1</option><option value="0.5" selected>×0.5</option><option value="0.25">×0.25</option></select></label>
+        </div>
+        <div class="btns">
+          <button id="bRun" class="primary" type="button">一時停止</button>
+          <button id="bPush" type="button">初速 v₀ を与える</button>
+          <button id="bReset" type="button">リセット</button>
+        </div>
+        <p class="hint">導体棒はマウス・指でドラッグして動かせる。離すと、そのときの速さで進む。棒の長さ L = 1 m、レール間の長さと同じ。</p>
+      </div>
+
+      <div class="card">
+        <h2>いまの状態</h2>
+        <dl>
+          <dt>棒の速度 v</dt><dd id="rV">-</dd>
+          <dt>誘導起電力 vBL</dt><dd id="rEmf">-</dd>
+          <dt>回路の電流 I</dt><dd id="rI">-</dd>
+          <dt>棒が磁場から受ける力</dt><dd id="rF">-</dd>
+          <dt>棒の両端の極性</dt><dd><span class="pol" id="rEnds">-</span></dd>
+          <dt>棒の両端の電位差</dt><dd id="rP">-</dd>
+        </dl>
+      </div>
+  </div>
+
+  <div class="bottom">
+    <div class="card stage">
+      <canvas id="main" width="1800" height="1440" aria-label="平行レールと導体棒の実験図"></canvas>
+    </div>
+
+      <div class="card" id="detCard">
+        <h2>棒の中の自由電子</h2>
+        <canvas id="det" width="1120" height="1280" aria-label="導体棒の中の自由電子にはたらく力"></canvas>
+        <div class="btns" style="margin-top:8px">
+          <button id="bPop" type="button">別ウィンドウで開く</button>
+          <button id="bDock" type="button" hidden>ここに戻す</button>
+        </div>
+        <p id="detNote">別ウィンドウが開けない環境では、このまま表示します。</p>
+      </div>
+  </div>
+</div>
+
+<script>
+(function(){
+'use strict';
+var $=function(id){return document.getElementById(id)};
+var W=900,H=720,PX=200,X0=110,YT=100,YB=300,YM=200,XR=690,XMIN=260,XSTART=300,GRAV=9.8;
+var SMIN=(XMIN-X0)/PX,SMAX=(XR-X0)/PX;
+var DW=560,DH=640;
+var FONT="'Zen Kaku Gothic New','Hiragino Kaku Gothic ProN','Yu Gothic',Meiryo,sans-serif";
+var MONO="'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace";
+
+var mainC=$('main'),mctx=mainC.getContext('2d');mctx.setTransform(2,0,0,2,0,0);
+var detC=$('det'),dctx=detC.getContext('2d');dctx.setTransform(2,0,0,2,0,0);
+var pop=null,popCtx=null;
+
+var st={s:(XSTART-X0)/PX,v:0,running:true,dragging:false,targetX:XSTART,phase:0,scroll:0};
+var last=performance.now(),lastDraw=0,tick=0;
+
+/* 電子の粒(詳細ビュー) */
+var els=[];for(var i=0;i<28;i++)els.push({x:122+Math.random()*96,y:100+Math.random()*450});
+
+function clamp(x,a,b){return Math.min(b,Math.max(a,x))}
+function num(id,d,lo,hi){var x=parseFloat($(id).value);if(!isFinite(x))x=d;return clamp(x,lo,hi)}
+function getP(){
+  var srcOn=$('tgSrc').checked,wOn=$('tgW').checked;
+  return{B:num('inB',1,0.1,5),R:num('inR',2,0.1,1000),r:num('inr',0.5,0,100),
+    srcOn:srcOn,V:srcOn?num('inV',2,-50,50):0,
+    wOn:wOn,M:wOn?num('inM',0.05,0.01,10):0,m:num('inm',0.1,0.01,10),
+    ts:parseFloat($('selTs').value)||0.5};
+}
+/* 回路: 棒の電流 I を +y(上向き)を正とする。L=1 m。 */
+function calc(p,v){
+  var Rt=p.R+p.r;
+  var I=(p.V-v*p.B)/Rt;          /* 棒内 +y 向きの電流 */
+  var Fm=I*p.B;                   /* 棒が受ける力 +x 向き */
+  var P=p.V-I*p.R;                /* 下端の電位 − 上端の電位 */
+  return{Rt:Rt,I:I,Fm:Fm,emf:-v*p.B,P:P,Ey:P,vB:v*p.B};
+}
+function step(p,dt){
+  var Mt=p.m+p.M,k=p.B*p.B/(p.R+p.r),F0=p.B*p.V/(p.R+p.r)+p.M*GRAV;
+  var vinf=F0/k,a=k/Mt,e=Math.exp(-a*dt);
+  var sn=st.s+vinf*dt+(st.v-vinf)/a*(1-e),vn=vinf+(st.v-vinf)*e;
+  if(sn>=SMAX){sn=SMAX;vn=Math.min(0,vn)}
+  if(sn<=SMIN){sn=SMIN;vn=Math.max(0,vn)}
+  st.s=sn;st.v=vn;
+}
+function advance(dtReal,p){
+  if(!st.running)return;
+  var dt=dtReal*p.ts;
+  if(st.dragging){
+    var sn=clamp((st.targetX-X0)/PX,SMIN,SMAX);
+    var vm=(sn-st.s)/Math.max(dt,1e-4);
+    st.v=st.v*0.6+clamp(vm,-12,12)*0.4;st.s=sn;return;
+  }
+  var n=Math.max(1,Math.ceil(dt/0.004));
+  for(var i=0;i<n;i++)step(p,dt/n);
+}
+
+/* ---------- テーマ色 ---------- */
+var C={};
+function readTheme(){
+  var cs=getComputedStyle(document.documentElement);
+  ['bg','panel','fg','muted','line','rail','rod','cur','vel','force','elec','purple','field','plus','minus','accent'].forEach(function(k){C[k]=cs.getPropertyValue('--'+k).trim()});
+}
+function arrow(c,x1,y1,x2,y2,col,w,h){
+  var dx=x2-x1,dy=y2-y1,L=Math.hypot(dx,dy);if(L<2)return;
+  var ux=dx/L,uy=dy/L;h=Math.min(h||11,L*0.8);
+  c.strokeStyle=col;c.fillStyle=col;c.lineWidth=w;c.lineCap='round';c.setLineDash([]);
+  c.beginPath();c.moveTo(x1,y1);c.lineTo(x2-ux*h*0.6,y2-uy*h*0.6);c.stroke();
+  c.beginPath();c.moveTo(x2,y2);c.lineTo(x2-ux*h-uy*h*0.5,y2-uy*h+ux*h*0.5);c.lineTo(x2-ux*h+uy*h*0.5,y2-uy*h-ux*h*0.5);c.closePath();c.fill();
+}
+function txt(c,s,x,y,col,size,al,font,wt){
+  c.font=(wt||400)+' '+size+'px '+(font||FONT);c.fillStyle=col;c.textAlign=al||'left';c.textBaseline='alphabetic';c.fillText(s,x,y);
+}
+function fieldDots(c,x1,x2,y1,y2,gap,ox){
+  c.strokeStyle=C.field;c.fillStyle=C.field;c.lineWidth=1.3;c.globalAlpha=0.5;
+  for(var x=x1+ox;x<=x2;x+=gap){for(var y=y1;y<=y2;y+=gap){
+    c.beginPath();c.arc(x,y,6,0,Math.PI*2);c.stroke();
+    c.beginPath();c.arc(x,y,1.8,0,Math.PI*2);c.fill();}}
+  c.globalAlpha=1;
+}
+function signGlyph(c,sg,x,y,col,r){
+  c.strokeStyle=col;c.lineWidth=2.2;c.lineCap='round';c.beginPath();
+  c.moveTo(x-r,y);c.lineTo(x+r,y);if(sg>0){c.moveTo(x,y-r);c.lineTo(x,y+r)}c.stroke();
+}
+function dirV(x){return x>0?'上向き ↑':'下向き ↓'}
+
+/* ---------- メイン描画 ---------- */
+function loopPoint(d,xr){
+  var a=YB-YT,b=xr-X0;
+  if(d<a)return[xr,YB-d,0,-1];d-=a;
+  if(d<b)return[xr-d,YT,-1,0];d-=b;
+  if(d<a)return[X0,YT+d,0,1];d-=a;
+  return[X0+d,YB,1,0];
+}
+function drawMain(c,p,q){
+  var xr=X0+st.s*PX,pol=q.P;
+  c.clearRect(0,0,W,H);c.fillStyle=C.panel;c.fillRect(0,0,W,H);
+  fieldDots(c,60,700,50,350,50,0);
+  txt(c,'B',64,30,C.field,15,'left',FONT,700);
+  txt(c,'⊙ 磁場 +z(紙面から手前へ)一様',84,30,C.muted,13);
+
+  /* レールと左の配線 */
+  c.lineCap='round';c.lineJoin='round';c.strokeStyle=C.rail;c.lineWidth=5;c.setLineDash([]);
+  c.beginPath();c.moveTo(X0,YT);c.lineTo(XR,YT);c.moveTo(X0,YB);c.lineTo(XR,YB);c.stroke();
+  c.beginPath();c.moveTo(X0,YT);c.lineTo(X0,125);
+  c.moveTo(X0,125);c.lineTo(X0,131);
+  for(var i=0;i<6;i++)c.lineTo(X0+(i%2?10:-10),131+(i+0.5)*(58/6));
+  c.lineTo(X0,189);c.lineTo(X0,195);
+  if(p.srcOn){c.moveTo(X0,195);c.lineTo(X0,238);c.moveTo(X0,256);c.lineTo(X0,YB)}
+  else{c.moveTo(X0,195);c.lineTo(X0,YB)}
+  c.stroke();
+  txt(c,'R = '+p.R.toFixed(1)+' Ω',X0-16,166,C.fg,13,'right',MONO);
+  if(p.srcOn){
+    var plusLow=p.V>=0,yA=238,yB2=256;
+    c.lineWidth=4;c.strokeStyle=C.fg;
+    var longY=plusLow?yB2:yA,shortY=plusLow?yA:yB2;
+    c.beginPath();c.moveTo(X0-17,longY);c.lineTo(X0+17,longY);c.stroke();
+    c.beginPath();c.moveTo(X0-9,shortY);c.lineTo(X0+9,shortY);c.stroke();
+    txt(c,'+',X0+24,longY+5,C.plus,15,'left',MONO,500);
+    txt(c,'−',X0+24,shortY+5,C.minus,15,'left',MONO,500);
+    txt(c,'V = '+p.V.toFixed(1)+' V',X0-26,252,C.fg,13,'right',MONO);
+  }
+  c.fillStyle=C.rail;c.fillRect(XR+2,YT-9,7,18);c.fillRect(XR+2,YB-9,7,18);
+  c.fillRect(XMIN-9,YT-9,7,18);c.fillRect(XMIN-9,YB-9,7,18);
+
+  /* 重り・糸・滑車 */
+  if(p.wOn){
+    var px=730,py=216,hang=20+(xr-XMIN);
+    c.strokeStyle=C.muted;c.lineWidth=2;c.beginPath();c.moveTo(xr+4,YM);c.lineTo(px,YM);c.arc(px,py,16,-Math.PI/2,0);c.lineTo(px+16,py+hang);c.stroke();
+    c.fillStyle=C.panel;c.strokeStyle=C.rail;c.lineWidth=3;c.beginPath();c.arc(px,py,16,0,Math.PI*2);c.fill();c.stroke();
+    c.fillStyle=C.rail;c.beginPath();c.arc(px,py,3,0,Math.PI*2);c.fill();
+    var wy=py+hang;
+    c.fillStyle=C.rod;c.strokeStyle=C.rail;c.lineWidth=2;c.fillRect(px-4,wy,40,40);c.strokeRect(px-4,wy,40,40);
+    txt(c,'M',px+16,wy+26,C.panel,18,'center',FONT,700);
+    txt(c,p.M.toFixed(2)+' kg',px+16,wy+58,C.muted,12,'center',MONO);
+  }
+
+  /* 電流の矢印(回路をひと回り) */
+  if(Math.abs(q.I)>1e-3){
+    var sg=q.I>0?1:-1,a=YB-YT,b=xr-X0,total=2*a+2*b,sp=56;
+    var size=8+5*Math.min(1,Math.abs(q.I)/2);
+    c.strokeStyle=C.cur;c.lineWidth=3.2;c.lineCap='round';c.lineJoin='round';
+    for(var d=((st.phase%sp)+sp)%sp;d<total;d+=sp){
+      var pt=loopPoint(d,xr),x=pt[0],y=pt[1];
+      if(Math.abs(x-X0)<1&&((y>115&&y<205)||(p.srcOn&&y>228&&y<266)))continue;
+      var tx=pt[2]*sg,ty=pt[3]*sg;
+      c.beginPath();c.moveTo(x-tx*size-ty*size*0.8,y-ty*size+tx*size*0.8);c.lineTo(x+tx*size*0.6,y+ty*size*0.6);
+      c.lineTo(x-tx*size+ty*size*0.8,y-ty*size-tx*size*0.8);c.stroke();
+    }
+  }
+
+  /* 導体棒 */
+  c.strokeStyle=C.rod;c.lineWidth=10;c.lineCap='round';c.beginPath();c.moveTo(xr,YT-16);c.lineTo(xr,YB+16);c.stroke();
+  c.strokeStyle=C.panel;c.globalAlpha=0.35;c.lineWidth=3;c.beginPath();c.moveTo(xr-2,YT-12);c.lineTo(xr-2,YB+12);c.stroke();c.globalAlpha=1;
+  c.fillStyle=C.rail;[YT,YB].forEach(function(yy){c.beginPath();c.arc(xr,yy,5,0,Math.PI*2);c.fill()});
+  txt(c,'導体棒',xr+24,YT-30,C.muted,12);
+
+  /* 極性 */
+  var neutral=Math.abs(pol)<1e-3,botPlus=pol>0;
+  var alpha=neutral?0:clamp(0.35+Math.abs(pol)/1.5,0.35,1);
+  if(!neutral){
+    c.globalAlpha=alpha;
+    for(var k=0;k<3;k++){
+      var yPlus=botPlus?YB-20-22*k:YT+20+22*k,yMin=botPlus?YT+20+22*k:YB-20-22*k;
+      signGlyph(c,1,xr+18,yPlus,C.plus,5);signGlyph(c,-1,xr+18,yMin,C.minus,5);
+    }
+    c.globalAlpha=1;
+  }
+  [[YB+34,botPlus?1:-1],[YT-34,botPlus?-1:1]].forEach(function(e){
+    var cy=e[0],sgn=neutral?0:e[1];
+    c.beginPath();c.arc(xr,cy,14,0,Math.PI*2);
+    if(sgn===0){c.strokeStyle=C.muted;c.lineWidth=1.5;c.setLineDash([4,3]);c.stroke();c.setLineDash([]);txt(c,'0',xr,cy+5,C.muted,14,'center',MONO)}
+    else{c.fillStyle=sgn>0?C.plus:C.minus;c.fill();signGlyph(c,sgn,xr,cy,'#ffffff',6)}
+  });
+
+  /* v と F の矢印 */
+  if(Math.abs(st.v)>0.02){
+    var L1=clamp(Math.abs(st.v)*55,14,130),d1=st.v>0?1:-1;
+    arrow(c,xr,YM-44,xr+d1*L1,YM-44,C.vel,3.5,12);txt(c,'v',xr+d1*(L1+12),YM-39,C.vel,16,'center',FONT,700);
+  }
+  if(Math.abs(q.Fm)>0.01){
+    var L2=clamp(Math.abs(q.Fm)*45,14,130),d2=q.Fm>0?1:-1;
+    arrow(c,xr,YM+44,xr+d2*L2,YM+44,C.force,3.5,12);txt(c,'F',xr+d2*(L2+12),YM+49,C.force,16,'center',FONT,700);
+  }
+
+  /* 凡例・ひとこと */
+  var ly=410;
+  arrow(c,60,ly,100,ly,C.cur,3,11);txt(c,'電流 I の向き',112,ly+5,C.fg,14);
+  arrow(c,60,ly+30,100,ly+30,C.vel,3,11);txt(c,'導体棒の速度 v',112,ly+35,C.fg,14);
+  arrow(c,60,ly+60,100,ly+60,C.force,3,11);txt(c,'導体棒が磁場から受ける力 F = I L B',112,ly+65,C.fg,14);
+  c.beginPath();c.arc(80,ly+90,12,0,Math.PI*2);c.fillStyle=C.plus;c.fill();signGlyph(c,1,80,ly+90,'#fff',5);
+  txt(c,'高電位の端',112,ly+95,C.fg,14);
+  c.beginPath();c.arc(236,ly+90,12,0,Math.PI*2);c.fillStyle=C.minus;c.fill();signGlyph(c,-1,236,ly+90,'#fff',5);
+  txt(c,'低電位の端',268,ly+95,C.fg,14);
+  var msg=neutral?'いま棒の両端に電位差はない':'いま棒の '+(botPlus?'下端が +、上端が −':'上端が +、下端が −');
+  txt(c,msg,60,ly+148,C.fg,22,'left',FONT,700);
+  txt(c,'座標: x→右  y→上  z→手前',60,ly+180,C.muted,13);
+  if(!p.wOn&&!p.srcOn&&Math.abs(st.v)<0.02)txt(c,'導体棒をドラッグするか、「初速を与える」を押してください',60,ly+212,C.accent,14,'left',FONT,500);
+  /* 座標軸 */
+  var ax=70,ay=680;
+  arrow(c,ax,ay,ax+44,ay,C.muted,2,8);arrow(c,ax,ay,ax,ay-44,C.muted,2,8);
+  txt(c,'x',ax+54,ay+5,C.muted,13,'center',MONO);txt(c,'y',ax,ay-52,C.muted,13,'center',MONO);
+  c.strokeStyle=C.muted;c.lineWidth=1.6;c.beginPath();c.arc(ax,ay,8,0,Math.PI*2);c.stroke();c.fillStyle=C.muted;c.beginPath();c.arc(ax,ay,2.2,0,Math.PI*2);c.fill();
+  txt(c,'z',ax-18,ay+22,C.muted,13,'center',MONO);
+}
+
+/* ---------- 自由電子ビュー ---------- */
+function circled(n){return['','①','②','③','④','⑤'][n]}
+function drawDetail(c,p,q,dtReal){
+  var rodL=100,rodR=240,cx=170,cy=330;
+  c.clearRect(0,0,DW,DH);c.fillStyle=C.panel;c.fillRect(0,0,DW,DH);
+  /* 背景の磁場(棒の運動に合わせて流れる) */
+  c.save();c.beginPath();c.rect(0,0,262,DH);c.clip();
+  var off=((st.scroll%50)+50)%50;
+  fieldDots(c,-50,262,30,DH,50,off);
+  c.restore();
+  txt(c,'B ⊙ +z',10,22,C.field,12,'left',MONO);
+
+  /* 棒 */
+  c.fillStyle=C.rod;c.globalAlpha=0.22;
+  c.beginPath();c.roundRect?c.roundRect(rodL,90,rodR-rodL,470,16):c.rect(rodL,90,rodR-rodL,470);c.fill();c.globalAlpha=1;
+  c.strokeStyle=C.rod;c.lineWidth=3;c.beginPath();c.roundRect?c.roundRect(rodL,90,rodR-rodL,470,16):c.rect(rodL,90,rodR-rodL,470);c.stroke();
+  txt(c,'導体棒(拡大)',rodR+8,86,C.muted,12);
+
+  var neutral=Math.abs(q.P)<1e-3,botPlus=q.P>0;
+  [[596,botPlus?1:-1],[52,botPlus?-1:1]].forEach(function(e){
+    c.beginPath();c.arc(cx,e[0],18,0,Math.PI*2);
+    if(neutral){c.strokeStyle=C.muted;c.lineWidth=1.5;c.setLineDash([4,3]);c.stroke();c.setLineDash([]);txt(c,'0',cx,e[0]+5,C.muted,15,'center',MONO)}
+    else{c.fillStyle=e[1]>0?C.plus:C.minus;c.fill();signGlyph(c,e[1],cx,e[0],'#fff',7)}
+  });
+
+  /* 電子 */
+  var drift=60*q.I/(Math.abs(q.I)+0.3); /* 電流と逆向きに動くので +I は画面下向き */
+  els.forEach(function(e){
+    e.y+=drift*dtReal+(Math.random()-0.5)*24*dtReal*4;
+    e.x+=(Math.random()-0.5)*60*dtReal*3;
+    if(e.y>548)e.y-=450;if(e.y<100)e.y+=450;
+    e.x=clamp(e.x,rodL+12,rodR-12);
+    c.fillStyle=C.elec;c.globalAlpha=0.55;c.beginPath();c.arc(e.x,e.y,6.5,0,Math.PI*2);c.fill();c.globalAlpha=1;
+    signGlyph(c,-1,e.x,e.y,'#fff',3.2);
+  });
+  c.fillStyle=C.elec;c.strokeStyle=C.fg;c.lineWidth=2;c.beginPath();c.arc(cx,cy,14,0,Math.PI*2);c.fill();c.stroke();
+  signGlyph(c,-1,cx,cy,'#fff',6);
+
+  /* 力(電子:電荷 −e)。力/e を V/m で比べる */
+  var F1=q.vB;           /* 磁場の力 +y 向き成分 / e : e v B */
+  var FE=-q.Ey;          /* 電場の力 +y 成分 / e : −E_y */
+  var Fn=F1+FE;
+  var mx=Math.max(Math.abs(F1),Math.abs(FE),1e-9);
+  var sc=150/mx;
+  function vert(val,xo,col,lab){
+    var len=Math.abs(val)*sc;if(len<3)return;
+    var d=val>0?-1:1;
+    c.strokeStyle=C.muted;c.lineWidth=1;c.setLineDash([3,3]);c.beginPath();c.moveTo(cx,cy);c.lineTo(cx+xo,cy);c.stroke();c.setLineDash([]);
+    arrow(c,cx+xo,cy,cx+xo,cy+d*len,col,4,13);
+    txt(c,lab,cx+xo,cy+d*(len+16)+5,col,15,'center',FONT,700);
+  }
+  vert(F1,-34,C.force,'①');vert(FE,34,C.elec,'②');
+  if(Math.abs(Fn)*sc>=3)vert(Fn,0,C.fg,'③');
+
+  var xDir=Math.abs(q.I)>0.005?(q.I>0?1:-1):0;
+  if(xDir){
+    var l4=110*Math.abs(q.I)/(Math.abs(q.I)+0.5);
+    c.strokeStyle=C.muted;c.lineWidth=1;c.setLineDash([3,3]);c.beginPath();c.moveTo(cx,cy);c.lineTo(cx,cy+46);c.stroke();c.setLineDash([]);
+    arrow(c,cx,cy+46,cx+xDir*l4,cy+46,C.purple,4,13);txt(c,'④',cx+xDir*(l4+16),cy+51,C.purple,15,'center',FONT,700);
+  }
+  if(Math.abs(st.v)>0.02){
+    var l5=clamp(Math.abs(st.v)*55,14,110),d5=st.v>0?1:-1;
+    c.strokeStyle=C.muted;c.lineWidth=1;c.setLineDash([3,3]);c.beginPath();c.moveTo(cx,cy);c.lineTo(cx,cy-46);c.stroke();c.setLineDash([]);
+    arrow(c,cx,cy-46,cx+d5*l5,cy-46,C.vel,4,13);txt(c,'⑤',cx+d5*(l5+16),cy-41,C.vel,15,'center',FONT,700);
+  }
+  if(mx<1e-6&&!xDir)txt(c,'力ははたらいていない',cx,cy+70,C.muted,13,'center');
+
+  /* 凡例 */
+  var lx=282,ly=110;
+  function dv(val){return Math.abs(val)<1e-9?'0':(val>0?'↑':'↓')}
+  function f2(x){return Math.abs(x).toFixed(2)}
+  var rows=[
+    [1,C.force,'磁場から受ける力 −e(v×B)','F/e = '+f2(F1)+' V/m '+dv(F1)+'(棒の運動による)'],
+    [2,C.elec,'電場から受ける力 −eE','F/e = '+f2(FE)+' V/m '+dv(FE)+'(電荷のかたよりによる)'],
+    [3,C.fg,'①と②の合力(棒に沿う向き)',Math.abs(Fn)<5e-4?'ほぼ 0(つり合い)':'F/e = '+f2(Fn)+' V/m '+dv(Fn)+'(電子の移動を生む)'],
+    [4,C.purple,'電子の移動で受ける磁場の力',xDir?('向き '+(xDir>0?'→':'←')+'(棒全体が受ける力のもと)・長さは強調'):'電流が流れていないので 0'],
+    [5,C.vel,'棒の速度 v(電子も同じ速度)',Math.abs(st.v)>0.02?('v = '+Math.abs(st.v).toFixed(2)+' m/s '+(st.v>0?'→':'←')):'静止']
+  ];
+  rows.forEach(function(r,i){
+    var y=ly+i*62;
+    txt(c,circled(r[0]),lx,y,r[1],17,'left',FONT,700);
+    txt(c,r[2],lx+24,y,C.fg,13,'left',FONT,700);
+    wrap(c,r[3],lx+24,y+18,236,12,C.muted);
+  });
+  var cap=neutral?'両端に電位差がないため、電場の力は 0 です。':
+    '電子は '+(botPlus?'上端':'下端')+' 側に集まり、'+(botPlus?'上端が −、下端が +':'下端が −、上端が +')+' になります。';
+  wrap(c,cap,lx,450,256,13,C.fg,true);
+  wrap(c,'電子の電荷は −e。力は力÷e [V/m] で表し、①②③は同じ縮尺。',lx,512,256,12,C.muted);
+}
+function wrap(c,s,x,y,w,size,col,bold){
+  c.font=(bold?700:400)+' '+size+'px '+FONT;c.fillStyle=col;c.textAlign='left';
+  var line='',yy=y;
+  for(var i=0;i<s.length;i++){
+    var t=line+s[i];
+    if(c.measureText(t).width>w&&line){c.fillText(line,x,yy);line=s[i];yy+=size*1.5}else line=t;
+  }
+  c.fillText(line,x,yy);
+}
+
+/* ---------- 数値表示 ---------- */
+function setText(id,s){var e=$(id);if(e.textContent!==s)e.textContent=s}
+function readouts(p,q){
+  var v=st.v;
+  setText('rV',Math.abs(v)<0.005?'0.00 m/s':Math.abs(v).toFixed(2)+' m/s '+(v>0?'(→ +x)':'(← −x)'));
+  var emf=Math.abs(v)*p.B;
+  setText('rEmf',emf<0.005?'0.00 V':emf.toFixed(2)+' V(棒の中で '+(v>0?'下向き':'上向き')+')');
+  if(Math.abs(q.I)<0.005)setText('rI','0.00 A');
+  else setText('rI',Math.abs(q.I).toFixed(2)+' A(棒を'+(q.I>0?'上':'下')+'向き・'+(q.I>0?'反時計回り':'時計回り')+')');
+  setText('rF',Math.abs(q.Fm)<0.005?'0.00 N':Math.abs(q.Fm).toFixed(2)+' N('+(q.Fm>0?'→ +x':'← −x')+')');
+  var ends=$('rEnds'),neutral=Math.abs(q.P)<1e-3,bp=q.P>0;
+  var html=neutral?'<span class="chip z">0</span>なし':
+    '<span>下端</span><span class="chip '+(bp?'p':'m')+'">'+(bp?'+':'−')+'</span><span>上端</span><span class="chip '+(bp?'m':'p')+'">'+(bp?'−':'+')+'</span>';
+  if(ends.dataset.k!==html){ends.dataset.k=html;ends.innerHTML=html}
+  setText('rP',Math.abs(q.P).toFixed(2)+' V');
+}
+
+/* ---------- ループ ---------- */
+function frame(){
+  var t=performance.now();
+  if(t-lastDraw<6)return;
+  var dtReal=Math.min(0.05,(t-last)/1000);last=t;lastDraw=t;
+  readTheme();
+  var p=getP();
+  advance(dtReal,p);
+  var q=calc(p,st.v);
+  if(st.running){
+    var sg=q.I>0?1:-1;
+    st.phase+=sg*(50+90*Math.min(1,Math.abs(q.I)/2))*dtReal;
+    st.scroll+=-st.v*60*dtReal;
+  }
+  if(pop&&pop.closed){dock()}
+  drawMain(mctx,p,q);
+  readouts(p,q);
+  if(pop&&popCtx){try{drawDetail(popCtx,p,q,dtReal)}catch(e){dock()}}
+  else drawDetail(dctx,p,q,dtReal);
+}
+function rafLoop(){frame();window.requestAnimationFrame(rafLoop)}
+function popLoop(){if(!pop||pop.closed)return;frame();pop.requestAnimationFrame(popLoop)}
+
+/* ---------- 別ウィンドウ ---------- */
+function dock(){
+  pop=null;popCtx=null;$('detCard').classList.remove('away');$('bDock').hidden=true;$('bPop').hidden=false;
+  setText('detNote','別ウィンドウが開けない環境では、このまま表示します。');
+}
+function openPop(){
+  var w=null;
+  try{w=window.open('','electronForceView','width=600,height=720,resizable=yes')}catch(e){w=null}
+  if(!w){setText('detNote','この環境では別ウィンドウを開けませんでした。ここに表示します。');return}
+  try{
+    readTheme();
+    w.document.open();
+    w.document.write('<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>自由電子にはたらく力</title><style>html,body{margin:0;background:'+C.panel+'}canvas{display:block;width:100%;max-width:560px;height:auto;margin:0 auto}</style></head><body><canvas id="c" width="1120" height="1280"></canvas></body></html>');
+    w.document.close();
+    var cv=w.document.getElementById('c');
+    popCtx=cv.getContext('2d');popCtx.setTransform(2,0,0,2,0,0);
+    pop=w;
+    $('detCard').classList.add('away');$('bDock').hidden=false;$('bPop').hidden=true;
+    setText('detNote','別ウィンドウに表示中です。');
+    w.requestAnimationFrame(popLoop);
+  }catch(e){try{w.close()}catch(_){}dock();setText('detNote','別ウィンドウの表示に失敗しました。ここに表示します。')}
+}
+
+/* ---------- 操作 ---------- */
+function reset(){st.s=(XSTART-X0)/PX;st.v=0;st.phase=0;st.dragging=false;st.targetX=XSTART}
+$('bRun').addEventListener('click',function(){st.running=!st.running;this.textContent=st.running?'一時停止':'再開';last=performance.now()});
+$('bReset').addEventListener('click',reset);
+$('bPush').addEventListener('click',function(){st.v=num('inv0',1.5,-10,10);if(!st.running){$('bRun').click()}});
+$('bPop').addEventListener('click',openPop);
+$('bDock').addEventListener('click',function(){try{pop&&pop.close()}catch(e){}dock()});
+$('tgW').addEventListener('change',function(){$('tgWl').textContent=this.checked?'あり':'なし';$('inM').disabled=!this.checked});
+$('tgSrc').addEventListener('change',function(){$('tgSl').textContent=this.checked?'あり':'なし';$('inV').disabled=!this.checked});
+$('inM').disabled=true;$('inV').disabled=true;
+
+function logical(ev){var r=mainC.getBoundingClientRect();return[(ev.clientX-r.left)*W/r.width,(ev.clientY-r.top)*H/r.height]}
+mainC.addEventListener('pointerdown',function(ev){
+  var m=logical(ev),xr=X0+st.s*PX;
+  if(Math.abs(m[0]-xr)<26&&m[1]>YT-40&&m[1]<YB+40){
+    st.dragging=true;st.targetX=m[0];try{mainC.setPointerCapture(ev.pointerId)}catch(e){}
+    mainC.style.cursor='grabbing';ev.preventDefault();
+  }
+});
+mainC.addEventListener('pointermove',function(ev){
+  var m=logical(ev);
+  if(st.dragging)st.targetX=m[0];
+  else{var xr=X0+st.s*PX;mainC.style.cursor=(Math.abs(m[0]-xr)<26&&m[1]>YT-40&&m[1]<YB+40)?'grab':'default'}
+});
+function endDrag(){if(st.dragging){st.dragging=false;mainC.style.cursor='default'}}
+mainC.addEventListener('pointerup',endDrag);mainC.addEventListener('pointercancel',endDrag);
+window.addEventListener('beforeunload',function(){try{pop&&pop.close()}catch(e){}});
+
+readTheme();
+window.requestAnimationFrame(rafLoop);
+})();
+</script>
+
+</body></html>
