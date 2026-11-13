@@ -398,7 +398,7 @@ function drawDetail(c,p,q,dtReal){
   vert(F1,-34,C.force,'①');vert(FE,34,C.elec,'②');
   if(Math.abs(Fn)*sc>=3)vert(Fn,0,C.fg,'③');
 
-  var xDir=Math.abs(q.I)>0.005?(q.I>0?1:-1):0;
+  var xDir=Math.abs(q.I)>0.005?(q.Fm>0?1:-1):0; /* 力の向き = I と B の符号の積 */
   if(xDir){
     var l4=110*Math.abs(q.I)/(Math.abs(q.I)+0.5);
     c.strokeStyle=C.muted;c.lineWidth=1;c.setLineDash([3,3]);c.beginPath();c.moveTo(cx,cy);c.lineTo(cx,cy+46);c.stroke();c.setLineDash([]);
