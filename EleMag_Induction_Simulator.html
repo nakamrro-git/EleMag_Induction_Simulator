@@ -90,7 +90,7 @@ dd .u{color:var(--muted)}
         <div class="fields">
           <label class="f"><span>電源電圧 V [V](負で逆向き)</span><input type="number" id="inV" value="2" step="0.5" min="-50" max="50"></label>
           <label class="f"><span>抵抗 R [Ω]</span><input type="number" id="inR" value="2" step="0.5" min="0.1" max="1000"></label>
-          <label class="f"><span>磁束密度 B [T]</span><input type="number" id="inB" value="1" step="0.1" min="0.1" max="5"></label>
+          <label class="f"><span>磁束密度 B [T](負で −z 向き)</span><input type="number" id="inB" value="1" step="0.1" min="-5" max="5"></label>
           <label class="f"><span>棒の抵抗 r [Ω]</span><input type="number" id="inr" value="0.5" step="0.1" min="0" max="100"></label>
           <label class="f"><span>棒の質量 m [kg]</span><input type="number" id="inm" value="0.1" step="0.05" min="0.01" max="10"></label>
           <label class="f"><span>重りの質量 M [kg]</span><input type="number" id="inM" value="0.05" step="0.05" min="0.01" max="10"></label>
@@ -158,9 +158,11 @@ var els=[];for(var i=0;i<28;i++)els.push({x:122+Math.random()*96,y:100+Math.rand
 
 function clamp(x,a,b){return Math.min(b,Math.max(a,x))}
 function num(id,d,lo,hi){var x=parseFloat($(id).value);if(!isFinite(x))x=d;return clamp(x,lo,hi)}
+function getB(){var b=num('inB',1,-5,5);if(Math.abs(b)<0.1)b=b<0?-0.1:0.1;return b}
+var curSign=1;
 function getP(){
   var srcOn=$('tgSrc').checked,wOn=$('tgW').checked;
-  return{B:num('inB',1,0.1,5),R:num('inR',2,0.1,1000),r:num('inr',0.5,0,100),
+  return{B:getB(),R:num('inR',2,0.1,1000),r:num('inr',0.5,0,100),
     srcOn:srcOn,V:srcOn?num('inV',2,-50,50):0,
     wOn:wOn,M:wOn?num('inM',0.05,0.01,10):0,m:num('inm',0.1,0.01,10),
     ts:parseFloat($('selTs').value)||0.5};
@@ -213,7 +215,7 @@ function fieldDots(c,x1,x2,y1,y2,gap,ox){
   c.strokeStyle=C.field;c.fillStyle=C.field;c.lineWidth=1.3;c.globalAlpha=0.5;
   for(var x=x1+ox;x<=x2;x+=gap){for(var y=y1;y<=y2;y+=gap){
     c.beginPath();c.arc(x,y,6,0,Math.PI*2);c.stroke();
-    c.beginPath();c.arc(x,y,1.8,0,Math.PI*2);c.fill();}}
+    if(curSign>0){c.beginPath();c.arc(x,y,1.8,0,Math.PI*2);c.fill()}else{c.beginPath();c.moveTo(x-4.2,y-4.2);c.lineTo(x+4.2,y+4.2);c.moveTo(x+4.2,y-4.2);c.lineTo(x-4.2,y+4.2);c.stroke()}}}
   c.globalAlpha=1;
 }
 function signGlyph(c,sg,x,y,col,r){
@@ -235,7 +237,7 @@ function drawMain(c,p,q){
   c.clearRect(0,0,W,H);c.fillStyle=C.panel;c.fillRect(0,0,W,H);
   fieldDots(c,60,700,50,350,50,0);
   txt(c,'B',64,30,C.field,15,'left',FONT,700);
-  txt(c,'⊙ 磁場 +z(紙面から手前へ)一様',84,30,C.muted,13);
+  txt(c,curSign>0?'⊙ 磁場 +z(紙面から手前へ)一様':'⊗ 磁場 −z(紙面の奥へ)一様',84,30,C.muted,13);
 
   /* レールと左の配線 */
   c.lineCap='round';c.lineJoin='round';c.strokeStyle=C.rail;c.lineWidth=5;c.setLineDash([]);
@@ -352,7 +354,7 @@ function drawDetail(c,p,q,dtReal){
   var off=((st.scroll%50)+50)%50;
   fieldDots(c,-50,262,30,DH,50,off);
   c.restore();
-  txt(c,'B ⊙ +z',10,22,C.field,12,'left',MONO);
+  txt(c,curSign>0?'B ⊙ +z':'B ⊗ −z',10,22,C.field,12,'left',MONO);
 
   /* 棒 */
   c.fillStyle=C.rod;c.globalAlpha=0.22;
@@ -446,8 +448,8 @@ function setText(id,s){var e=$(id);if(e.textContent!==s)e.textContent=s}
 function readouts(p,q){
   var v=st.v;
   setText('rV',Math.abs(v)<0.005?'0.00 m/s':Math.abs(v).toFixed(2)+' m/s '+(v>0?'(→ +x)':'(← −x)'));
-  var emf=Math.abs(v)*p.B;
-  setText('rEmf',emf<0.005?'0.00 V':emf.toFixed(2)+' V(棒の中で '+(v>0?'下向き':'上向き')+')');
+  var emf=Math.abs(v*p.B);
+  setText('rEmf',emf<0.005?'0.00 V':emf.toFixed(2)+' V(棒の中で '+(q.emf<0?'下向き':'上向き')+')');
   if(Math.abs(q.I)<0.005)setText('rI','0.00 A');
   else setText('rI',Math.abs(q.I).toFixed(2)+' A(棒を'+(q.I>0?'上':'下')+'向き・'+(q.I>0?'反時計回り':'時計回り')+')');
   setText('rF',Math.abs(q.Fm)<0.005?'0.00 N':Math.abs(q.Fm).toFixed(2)+' N('+(q.Fm>0?'→ +x':'← −x')+')');
@@ -464,7 +466,7 @@ function frame(){
   if(t-lastDraw<6)return;
   var dtReal=Math.min(0.05,(t-last)/1000);last=t;lastDraw=t;
   readTheme();
-  var p=getP();
+  var p=getP();curSign=p.B>=0?1:-1;
   advance(dtReal,p);
   var q=calc(p,st.v);
   if(st.running){
